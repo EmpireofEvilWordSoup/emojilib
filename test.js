@@ -3,7 +3,6 @@
 var fs = require('fs')
 var rawData = fs.read('emojis.json').toString()
 var buildFailed = false
-var escapeStr = require('escape-string-regexp')
 var passed = function () { console.log('\x1B[92mPASSED\x1B[0m\n') }
 var failed = function () {
   console.log('\x1B[91mFAILED\x1B[0m\n')
@@ -18,6 +17,20 @@ var reveal = function () {
     phantom.exit()
   }
 }
+
+var categories = {
+  people: 326,
+  animals_and_nature: 167,
+  food_and_drink: 98,
+  activity: 89,
+  travel_and_places: 119,
+  objects: 180,
+  symbols: 273,
+  flags: 250
+}
+
+// Calculate numbeer of emojis from categories
+var numberOfEmojis = Object.keys(categories).map(function (key) { return categories[key] }).reduce(function (a, b) { return a + b })
 
 //
 console.log('\nTEST: Correct JSON format')
@@ -36,10 +49,8 @@ try {
 //
 console.log('TEST: Correct number of emojis')
 
-var emojiNumber = 1301 // 1284(from all categories) + 17(custom)
-
-if (keys.length !== emojiNumber) {
-  console.log('There are ' + emojiNumber + ' emojis, but emojis.json has ' + keys.length + ' entries.')
+if (keys.length !== numberOfEmojis) {
+  console.log('There are ' + numberOfEmojis + ' emojis, but emojis.json has ' + keys.length + ' entries.')
   failed()
 } else {
   passed()
@@ -48,8 +59,12 @@ if (keys.length !== emojiNumber) {
 //
 console.log('TEST: Ordered keys are up to date')
 
-if (orderd_keys.length !== emojiNumber) {
-  console.log('There are ' + emojiNumber + ' emojis, but keys contains ' + orderd_keys.length + ' emojis.')
+ordered_keys_not_in_keys = orderd_keys.filter(function(key) { return keys.indexOf(key) < 0})
+if (orderd_keys.length !== numberOfEmojis) {
+  console.log('There are ' + numberOfEmojis + ' emojis, but keys contains ' + orderd_keys.length + ' emojis.')
+  failed()
+} else if (ordered_keys_not_in_keys.length > 0) {
+  console.log('Failed to find ' + ordered_keys_not_in_keys.join(', ') + ' in emojis.json.')
   failed()
 } else {
   passed()
@@ -57,17 +72,6 @@ if (orderd_keys.length !== emojiNumber) {
 
 //
 console.log('TEST: Correct number of emojis in each category')
-
-var categories = {
-  people: 204,
-  animals_and_nature: 147,
-  food_and_drink: 67,
-  activity: 57,
-  travel_and_places: 115,
-  objects: 178,
-  symbols: 269,
-  flags: 247
-}
 
 var counter = []
 
@@ -100,10 +104,22 @@ var dups = []
 var keysFromRawData = rawData.match(/\".+\": {/g)
 
 keysFromRawData.forEach(function (key) {
+  key = key.replace(/\"|\:|\s|\{/g, '')
   if (arr.indexOf(key) < 0) {
     arr.push(key)
   } else {
-    dups.push(key.replace(/\"|\:|\s|\{/g, ''))
+    dups.push(key)
+  }
+})
+
+var charsFromRawData = rawData.match(/"char": ".+"/g)
+
+charsFromRawData.forEach(function (character) {
+  character = character.replace(/:|"|(char)|\s/g, '')
+  if (arr.indexOf(character) < 0) {
+    arr.push(character)
+  } else {
+    dups.push(character)
   }
 })
 
@@ -124,15 +140,15 @@ var unnecessitiesInKeywords = []
 
 keys.forEach(function (key) {
   data[key]['keywords'].forEach(function (keyword) {
-    keyword = escapeStr(keyword)
-    if (key.match(keyword)) {
+    if (key === keyword) {
       unnecessities.push([key, keyword])
     }
 
     var otherKeywords = data[key]['keywords'].slice()
     otherKeywords.splice(data[key]['keywords'].indexOf(keyword), 1)
+
     otherKeywords.forEach(function (otherKeyword) {
-      if (otherKeyword.match(keyword)) {
+      if (otherKeyword === keyword) {
         unnecessitiesInKeywords.push([otherKeyword, keyword, key])
       }
     })
@@ -141,7 +157,7 @@ keys.forEach(function (key) {
 
 if (unnecessities.length > 0 || unnecessitiesInKeywords.length > 0) {
   unnecessities.forEach(function (arr) {
-    console.log('"' + arr[1] + '" is unnecessary as it is already part of "' + arr[0] + '" and will be matched.')
+    console.log('"' + arr[1] + '" is unnecessary as the key is already "' + arr[0] + '".')
   })
   unnecessitiesInKeywords.forEach(function (arr) {
     console.log('"' + arr[1] + '" is unnecessary as a "' + arr[2] + '" already has a keyword "' + arr[0] + '".')
@@ -168,6 +184,26 @@ lines.forEach(function (line, index) {
 if (offenses.length > 0) {
   offenses.forEach(function (lineNo) {
     console.log('Line ' + lineNo + ' has the wrong format.')
+  })
+
+  failed()
+} else {
+  passed()
+}
+
+//
+console.log('TEST: Properties')
+
+var properties = ["keywords", "char", "fitzpatrick_scale", "category"]
+var emojiWithWrongKeys = []
+keys.forEach(function (key) {
+  if (Object.keys(data[key]).join() !== properties.join()) {
+    emojiWithWrongKeys.push(key)
+  }
+})
+if (emojiWithWrongKeys.length > 0) {
+  emojiWithWrongKeys.forEach(function (emoji) {
+    console.log(emoji + ' has keys "' + Object.keys(data[emoji]).join(', ') + '", expect: "' + properties.join(', ') + '"')
   })
 
   failed()
